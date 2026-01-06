@@ -6,7 +6,21 @@
 
 #include <vector>
 #include <algorithm>
-#include <execution>
+
+// ===== macOS / libc++ compatibility for <execution> algorithms =====
+// ===== macOS / libc++ safe transform wrappers =====
+// NOTE: libc++ does NOT reliably support execution policies (par_unseq).
+// We therefore ALWAYS fall back to sequential std::transform.
+
+#define MDML_TRANSFORM(first, last, result, op) \
+    std::transform((first), (last), (result), (op))
+
+#define MDML_TRANSFORM2(first1, last1, first2, result, op) \
+    std::transform((first1), (last1), (first2), (result), (op))
+
+// ================================================================
+
+
 #include <concepts>
 
 #include <Eigen/Core>
@@ -20,7 +34,7 @@ namespace md_ml {
 // 4. naive for loop
 //
 // I found that std::transform is the fastest, so I decided to use std::transform
-// Also, we can use std::execution::par_unseq to parallelize the computation
+// Also, we can use MDML_EXEC_POLICY to parallelize the computation
 // However, the parallelization is only available
 // on Linux gcc and Windows MinGW gcc, but not on macOS Apple Clang.
 // so we detect it using macros to avoid compilation errors on macOS.
@@ -38,11 +52,7 @@ inline
 std::vector<T> matrixAdd(const std::vector<T>& x, const std::vector<T>& y) {
     std::vector<T> output(x.size());
 
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL   // or !__cpp_lib_execution?
-    std::transform(x.begin(), x.end(), y.begin(), output.begin(), std::plus<T>());
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), y.begin(), output.begin(), std::plus<T>());
-#endif
+MDML_TRANSFORM2(x.begin(), x.end(), y.begin(), output.begin(), std::plus<T>());
 
     return output;
 }
@@ -51,11 +61,7 @@ std::vector<T> matrixAdd(const std::vector<T>& x, const std::vector<T>& y) {
 template <std::integral T>
 inline
 void matrixAddAssign(std::vector<T>& x, const std::vector<T>& y) {
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), y.begin(), x.begin(), std::plus<T>());
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), y.begin(), x.begin(), std::plus<T>());
-#endif
+MDML_TRANSFORM2(x.begin(), x.end(), y.begin(), x.begin(), std::plus<T>());
 }
 
 
@@ -63,13 +69,10 @@ template <std::integral T1, std::integral T2>
 inline
 std::vector<T1> matrixAddConstant(const std::vector<T1>& x, T2 constant) {
     std::vector<T1> output(x.size());
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), output.begin(),
-                   [constant](T1 val) { return val + constant; });
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), output.begin(),
-                   [constant](T1 val) { return val + constant; });
-#endif
+
+MDML_TRANSFORM(x.begin(), x.end(), output.begin(),
+               [constant](T1 val) { return val + constant; });
+
     return output;
 }
 
@@ -79,11 +82,7 @@ inline
 std::vector<T> matrixSubtract(const std::vector<T>& x, const std::vector<T>& y) {
     std::vector<T> output(x.size());
 
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), y.begin(), output.begin(), std::minus<T>());
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), y.begin(), output.begin(), std::minus<T>());
-#endif
+    MDML_TRANSFORM2(x.begin(), x.end(), y.begin(), output.begin(), std::minus<T>());
 
     return output;
 }
@@ -92,11 +91,8 @@ std::vector<T> matrixSubtract(const std::vector<T>& x, const std::vector<T>& y) 
 template <std::integral T>
 inline
 void matrixSubtractAssign(std::vector<T>& x, const std::vector<T>& y) {
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), y.begin(), x.begin(), std::minus<T>());
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), y.begin(), x.begin(), std::minus<T>());
-#endif
+    MDML_TRANSFORM2(x.begin(), x.end(), y.begin(), x.begin(), std::minus<T>());
+
 }
 
 
@@ -105,23 +101,19 @@ template <std::integral T>
 inline
 std::vector<T> matrixScalar(const std::vector<T>& x, T scalar) {
     std::vector<T> output(x.size());
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), output.begin(), [scalar](T val) { return scalar * val; });
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), output.begin(),
-                   [scalar](T val) { return scalar * val; });
-#endif
+
+MDML_TRANSFORM(x.begin(), x.end(), output.begin(),
+               [scalar](T val) { return scalar * val; });
+
     return output;
 }
 
 template <std::integral T>
 inline
 void matrixScalarAssign(std::vector<T>& x, T scalar) {
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), x.begin(), [scalar](T val) { return scalar * val; });
-#else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), x.begin(), [scalar](T val) { return scalar * val; });
-#endif
+MDML_TRANSFORM(x.begin(), x.end(), x.begin(),
+               [scalar](T val) { return scalar * val; });
+
 }
 
 
@@ -130,15 +122,12 @@ inline
 std::vector<T> matrixElemMultiply(std::vector<T>& x, std::vector<T>& y) {
     std::vector<T> output(x.size());
 
-#ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), y.begin(), output.begin(), std::multiplies<T>());
-#else
-    std::transform(std::execution::par_unseq,
-                   x.begin(), x.end(), y.begin(), output.begin(), std::multiplies<T>());
-#endif
+    MDML_TRANSFORM2(x.begin(), x.end(), y.begin(), output.begin(),
+                    std::multiplies<T>());
 
     return output;
 }
+
 
 
 template <std::integral T>

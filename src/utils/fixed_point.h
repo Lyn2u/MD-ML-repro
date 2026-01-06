@@ -9,6 +9,23 @@
 #include <algorithm>
 #include <execution>
 
+// ===== macOS / libc++ compatibility for <execution> algorithms =====
+// ===== safe transform wrappers (avoid <execution> policies on macOS/libc++) =====
+
+
+// safe transform wrappers (avoid <execution> policies on macOS/libc++)
+#ifndef MDML_FP_TRANSFORM
+  #define MDML_FP_TRANSFORM(first, last, result, op) \
+    std::transform((first), (last), (result), (op))
+
+  #define MDML_FP_TRANSFORM2(first1, last1, first2, result, op) \
+    std::transform((first1), (last1), (first2), (result), (op))
+#endif
+
+
+// ================================================================
+
+
 
 namespace md_ml {
 
@@ -39,6 +56,7 @@ template <typename ClearType>
 namespace FixedPoint {
     constexpr int fractionBits = 16;
     constexpr int truncateValue = 1 << fractionBits;
+
 }
 
 
@@ -52,9 +70,9 @@ template <typename Tp>
 std::vector<Tp> truncateClearVec(const std::vector<Tp>& x) {
     std::vector<Tp> ret(x.size());
 #ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), ret.begin(), truncateClear<Tp>);
+    MDML_FP_TRANSFORM(x.begin(), x.end(), ret.begin(), truncateClear<Tp>);
 #else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), ret.begin(), truncateClear<Tp>);
+    MDML_FP_TRANSFORM(x.begin(), x.end(), ret.begin(), truncateClear<Tp>);
 #endif
     return ret;
 }
@@ -62,9 +80,9 @@ std::vector<Tp> truncateClearVec(const std::vector<Tp>& x) {
 template <typename Tp>
 void truncateClearVecInplace(std::vector<Tp>& x) {
 #ifdef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
-    std::transform(x.begin(), x.end(), x.begin(), truncateClear<Tp>);
+    MDML_FP_TRANSFORM(x.begin(), x.end(), x.begin(), truncateClear<Tp>);
 #else
-    std::transform(std::execution::par_unseq, x.begin(), x.end(), x.begin(), truncateClear<Tp>);
+    MDML_FP_TRANSFORM(x.begin(), x.end(), x.begin(), truncateClear<Tp>);
 #endif
 }
 
@@ -92,7 +110,7 @@ double fix2double(ClearType x) {
 template <typename ClearType>
 std::vector<double> fix2doubleVec(const std::vector<ClearType>& x) {
     std::vector<double> res(x.size());
-    std::transform(x.begin(), x.end(), res.begin(), fix2double<ClearType>);
+    MDML_FP_TRANSFORM(x.begin(), x.end(), res.begin(), fix2double<ClearType>);
     return res;
 }
 

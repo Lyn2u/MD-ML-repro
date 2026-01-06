@@ -9,6 +9,17 @@
 #include <algorithm>
 #include <execution>
 
+// On macOS (Apple clang + libc++), parallel execution policies may be unavailable
+// or the overloads taking execution policies are not provided.
+// We therefore ALWAYS fall back to sequential std::transform.
+
+#define MDML_TRANSFORM(first, last, result, op) \
+  std::transform((first), (last), (result), (op))
+
+#define MDML_TRANSFORM2(first1, last1, first2, result, op) \
+  std::transform((first1), (last1), (first2), (result), (op))
+
+
 #include "Mod2PowN.h"
 
 
@@ -59,9 +70,8 @@ RemoveUpperBits(const std::vector<SemiShrType>& values) {
     std::transform(values.begin(), values.end(), ret.begin(),
                    [](SemiShrType value) { return RemoveUpperBits(value); });
 #else
-    std::transform(std::execution::par_unseq,
-                   values.begin(), values.end(), ret.begin(),
-                   [](SemiShrType value) { return RemoveUpperBits(value); });
+  MDML_TRANSFORM(values.begin(), values.end(), ret.begin(),
+                 [](SemiShrType value) { return RemoveUpperBits(value); });
 #endif
 
     return ret;
@@ -75,9 +85,9 @@ RemoveUpperBitsInplace(std::vector<SemiShrType>& values) {
     std::transform(values.begin(), values.end(), values.begin(),
                    [](SemiShrType value) { return RemoveUpperBits(value); });
 #else
-    std::transform(std::execution::par_unseq,
-                   values.begin(), values.end(), values.begin(),
-                   [](SemiShrType value) { return RemoveUpperBits(value); });
+      MDML_TRANSFORM(values.begin(), values.end(), values.begin(),
+                 [](SemiShrType value) { return RemoveUpperBits(value); });
+
 #endif
 }
 
